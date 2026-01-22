@@ -147,10 +147,40 @@ services:
       - spark-ivy-cache:/ivy
     working_dir: /opt/spark-apps
     command: >
-      bash -c "/opt/spark/bin/spark-submit --master spark://spark-master:7077 --conf spark.jars.ivy=/ivy --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0 spark_weather_aggregation.py"
+      bash -c "python3 -m pip install -q hdfs==2.7.3 && /opt/spark/bin/spark-submit --master spark://spark-master:7077 --conf spark.jars.ivy=/ivy --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0 spark_weather_aggregation.py"
     networks:
       - bigdata-network
     restart: unless-stopped
+  
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    ports:
+      - "9870:9870"
+      - "8020:8020"
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+    environment:
+      CLUSTER_NAME: bigdata-cluster
+      CORE_CONF_fs_defaultFS: hdfs://namenode:8020
+    env_file:
+      - ./hadoop.env
+    networks:
+      - bigdata-network
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    depends_on:
+      - namenode
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+      CORE_CONF_fs_defaultFS: hdfs://namenode:8020
+    env_file:
+      - ./hadoop.env
+    networks:
+      - bigdata-network
 
 networks:
   bigdata-network:
@@ -158,3 +188,5 @@ networks:
 
 volumes:
   spark-ivy-cache:
+  hadoop_datanode:
+  hadoop_namenode:
