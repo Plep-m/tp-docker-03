@@ -181,6 +181,71 @@ services:
       - ./hadoop.env
     networks:
       - bigdata-network
+  
+  postgres:
+    image: postgres:13
+    container_name: airflow-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bigdata-network
+
+  airflow-webserver:
+    image: apache/airflow:2.8.1
+    container_name: airflow-webserver
+    depends_on:
+      - postgres
+      - namenode
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./scripts/requirements.txt:/opt/airflow/requirements.txt
+    ports:
+      - "8083:8080"
+    command: >
+      bash -c "pip install --no-cache-dir kafka-python hdfs && airflow webserver"
+    networks:
+      - bigdata-network
+
+  airflow-scheduler:
+    image: apache/airflow:2.8.1
+    container_name: airflow-scheduler
+    depends_on:
+      - postgres
+      - airflow-webserver
+      - kafka
+      - namenode
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./scripts/requirements.txt:/opt/airflow/requirements.txt
+    command: >
+      bash -c "pip install --no-cache-dir kafka-python hdfs && airflow scheduler"
+    networks:
+      - bigdata-network
 
 networks:
   bigdata-network:
